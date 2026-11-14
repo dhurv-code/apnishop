@@ -1,7 +1,8 @@
+
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   collectCod,
@@ -20,7 +21,7 @@ function money(paise: number) {
   }).format(paise / 100);
 }
 
-export default function DeliveryCompletionPage() {
+function DeliveryCompletionContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const orderId = params.id;
@@ -219,5 +220,14 @@ export default function DeliveryCompletionPage() {
         )}
       </div>
     </main>
+  );
+}
+export default function DeliveryCompletionPage() {
+  return (
+    <Suspense
+      fallback={<main className="p-8">Loading delivery order...</main>}
+    >
+      <DeliveryCompletionContent />
+    </Suspense>
   );
 }

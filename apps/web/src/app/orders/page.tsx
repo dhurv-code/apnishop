@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState  } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { getOrder, OrderDetails } from "@/lib/orders";
@@ -13,7 +13,7 @@ function formatPrice(paise: number) {
   }).format(paise / 100);
 }
 
-export default function OrderConfirmationPage() {
+function OrderConfirmationContent() { 
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -186,5 +186,14 @@ export default function OrderConfirmationPage() {
         </div>
       </div>
     </main>
+  );
+}
+export default function OrderConfirmationPage() {
+  return (
+    <Suspense
+      fallback={<main className="min-h-screen p-8 text-center">Loading order details...</main>}
+    >
+      <OrderConfirmationContent />
+    </Suspense>
   );
 }
