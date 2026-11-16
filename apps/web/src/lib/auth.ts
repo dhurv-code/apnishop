@@ -1,4 +1,3 @@
-
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:4000/api/v1";
@@ -6,6 +5,7 @@ const API_BASE =
 export type CustomerUser = {
   id: string;
   phone: string;
+  email: string | null;
   fullName: string | null;
   role: "CUSTOMER" | "ADMIN" | "DELIVERY_PARTNER" | "SHOPKEEPER";
 };
@@ -35,9 +35,7 @@ async function authRequest<T>(
   const result = (await response.json()) as ApiResponse<T>;
 
   if (!response.ok || !result.success) {
-    throw new Error(
-      result.message || "Authentication request failed."
-    );
+    throw new Error(result.message || "Authentication request failed.");
   }
 
   return result;
@@ -45,25 +43,28 @@ async function authRequest<T>(
 
 export async function requestOtp(
   phone: string,
+  email: string,
   fullName?: string
 ) {
-  return authRequest<void>(
-    "/auth/request-otp",
-    "POST",
-    { phone, fullName: fullName || undefined }
-  );
+  return authRequest<void>("/auth/request-otp", "POST", {
+    phone,
+    email,
+    fullName: fullName || undefined,
+  });
 }
 
 export async function verifyOtp(
   phone: string,
+  email: string,
   otp: string,
   fullName?: string
 ) {
-  const response = await authRequest<CustomerUser>(
-    "/auth/verify-otp",
-    "POST",
-    { phone, otp, fullName: fullName || undefined }
-  );
+  const response = await authRequest<CustomerUser>("/auth/verify-otp", "POST", {
+    phone,
+    email,
+    otp,
+    fullName: fullName || undefined,
+  });
 
   if (!response.data) {
     throw new Error("Customer information was not returned.");
@@ -74,11 +75,7 @@ export async function verifyOtp(
 
 export async function getCurrentUser(): Promise<CustomerUser | null> {
   try {
-    const response = await authRequest<CustomerUser>(
-      "/auth/me",
-      "GET"
-    );
-
+    const response = await authRequest<CustomerUser>("/auth/me", "GET");
     return response.data ?? null;
   } catch (error) {
     if (

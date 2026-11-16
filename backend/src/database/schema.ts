@@ -126,6 +126,14 @@ export const users = pgTable(
 
     phone: varchar("phone", { length: 20 }).notNull().unique(),
 
+    // Email is the verified login identifier for the free email-OTP pilot.
+    // It is nullable so existing phone-based accounts can be linked safely.
+    email: varchar("email", { length: 255 }),
+
+    emailVerifiedAt: timestamp("email_verified_at", {
+      withTimezone: true,
+    }),
+
     fullName: varchar("full_name", { length: 120 }),
 
     role: userRoleEnum("role")
@@ -151,6 +159,9 @@ export const users = pgTable(
   (table) => [
     index("users_role_idx").on(table.role),
     index("users_status_idx").on(table.status),
+    uniqueIndex("users_email_unique")
+      .on(table.email)
+      .where(sql`${table.email} IS NOT NULL`),
   ]
 );
 
@@ -1034,6 +1045,9 @@ export const otpChallenges = pgTable(
 
     phone: varchar("phone", { length: 20 }).notNull(),
 
+    // Email address that receives this OTP. Nullable for legacy challenges.
+    email: varchar("email", { length: 255 }),
+
     fullName: varchar("full_name", { length: 120 }),
 
     otpHash: varchar("otp_hash", { length: 64 }).notNull(),
@@ -1057,6 +1071,11 @@ export const otpChallenges = pgTable(
   (table) => [
     index("auth_otp_phone_created_idx").on(
       table.phone,
+      table.createdAt
+    ),
+
+    index("auth_otp_email_created_idx").on(
+      table.email,
       table.createdAt
     ),
 

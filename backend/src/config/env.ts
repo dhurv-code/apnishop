@@ -18,6 +18,11 @@ const envSchema = z.object({
 
   OTP_PEPPER: z.string().min(32),
 
+  // Optional in development (OTP is logged locally); required by the OTP
+  // service in production. Keep both values in the Render environment only.
+  OTP_EMAIL_WEBHOOK_URL: z.string().url().optional(),
+  OTP_EMAIL_WEBHOOK_SECRET: z.string().min(32).optional(),
+
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
 });
 

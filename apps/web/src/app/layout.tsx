@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ApnaBasket | Groceries Delivered to Your Doorstep",
+  title: "Apna Basket | Shahabad's 1st E-commerce",
   description:
     "Shop groceries and daily essentials from your local shops with ApnaBasket.",
 };
