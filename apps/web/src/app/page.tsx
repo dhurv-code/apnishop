@@ -19,6 +19,12 @@ import {
   removeCartItem,
 } from "@/lib/customer";
 
+import {
+  getCurrentUser,
+  logoutCustomer,
+  type CustomerUser,
+} from "@/lib/auth";
+
 const categoryIcons: Record<string, string> = {
   fruits: "🍎",
   vegetables: "🥦",
@@ -69,6 +75,51 @@ export default function Home() {
   const cartCount = cart?.itemCount ?? 0;
   const cartTotalPaise = cart?.subtotalPaise ?? 0;
   const cartTotal = formatPrice(cartTotalPaise);
+
+
+  const [currentUser, setCurrentUser] =
+    useState<CustomerUser | null>(null);
+
+  const [authChecked, setAuthChecked] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    getCurrentUser()
+      .then((user) => {
+        if (active) setCurrentUser(user);
+      })
+      .catch((error) => {
+        console.error("Session check failed:", error);
+      })
+      .finally(() => {
+        if (active) setAuthChecked(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+    try {
+      await logoutCustomer();
+      setCurrentUser(null);
+      setCart(null);
+      setNotice("You have been logged out.");
+      router.refresh();
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Logout failed."
+      );
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   // ------------------------------------------
   // LOAD CATEGORIES
@@ -325,12 +376,33 @@ export default function Home() {
               Addresses
             </a>
 
-            <a
-              href="/login"
-              className="hidden rounded-xl border border-green-700 px-3 py-3 text-sm font-semibold text-green-800 hover:bg-green-50 sm:inline-block"
-            >
-              Login
-            </a>
+            {!authChecked ? (
+              <span className="px-2 text-xs text-gray-400">Checking...</span>
+            ) : currentUser ? (
+              <>
+                <a
+                  href="/orders"
+                  className="rounded-xl border border-gray-200 px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  My Orders
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  disabled={loggingOut}
+                  className="rounded-xl border border-red-200 px-3 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loggingOut ? "Logging out..." : "Logout"}
+                </button>
+              </>
+            ) : (
+              <a
+                href="/login"
+                className="rounded-xl border border-green-700 px-3 py-3 text-sm font-semibold text-green-800 hover:bg-green-50"
+              >
+                Login
+              </a>
+            )}
 
             <button
               type="button"
@@ -438,11 +510,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveCategory("all")}
-              className={`flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
-                activeCategory === "all"
+              className={`flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${activeCategory === "all"
                   ? "border-green-700 bg-green-50 text-green-800"
                   : "border-gray-100 bg-white"
-              }`}
+                }`}
             >
               <span className="text-3xl">🛒</span>
               <span className="text-xs font-semibold">All</span>
@@ -453,11 +524,10 @@ export default function Home() {
                 type="button"
                 key={category.id}
                 onClick={() => setActiveCategory(category.slug)}
-                className={`flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
-                  activeCategory === category.slug
+                className={`flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${activeCategory === category.slug
                     ? "border-green-700 bg-green-50 text-green-800"
                     : "border-gray-100 bg-white"
-                }`}
+                  }`}
               >
                 <span className="text-3xl">
                   {categoryIcons[category.slug] ?? "🛍️"}
@@ -481,8 +551,8 @@ export default function Home() {
                   : activeCategory === "all"
                     ? "Popular products"
                     : categories.find(
-                        (category) => category.slug === activeCategory
-                      )?.name ?? "Products"}
+                      (category) => category.slug === activeCategory
+                    )?.name ?? "Products"}
               </h3>
 
               <p className="mt-1 text-sm text-gray-500">
@@ -686,13 +756,41 @@ export default function Home() {
             <span className="text-[10px]">Cart ({cartCount})</span>
           </button>
 
-          <a
-            href="/login"
-            className="flex flex-col items-center gap-1 text-gray-500"
-          >
-            <span>👤</span>
-            <span className="text-[10px]">Login</span>
-          </a>
+          {!authChecked ? (
+            <span className="flex flex-col items-center gap-1 text-gray-400">
+              <span>👤</span>
+              <span className="text-[10px]">Account</span>
+            </span>
+          ) : currentUser ? (
+            <>
+              <a
+                href="/orders"
+                className="flex flex-col items-center gap-1 text-gray-500"
+              >
+                <span>📦</span>
+                <span className="text-[10px]">Orders</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                disabled={loggingOut}
+                className="flex flex-col items-center gap-1 text-red-600 disabled:opacity-50"
+              >
+                <span>↪</span>
+                <span className="text-[10px]">
+                  {loggingOut ? "Wait..." : "Logout"}
+                </span>
+              </button>
+            </>
+          ) : (
+            <a
+              href="/login"
+              className="flex flex-col items-center gap-1 text-gray-500"
+            >
+              <span>👤</span>
+              <span className="text-[10px]">Login</span>
+            </a>
+          )}
         </div>
       </nav>
 
