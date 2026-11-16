@@ -40,7 +40,10 @@ const COOKIE_NAME =
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  sameSite:
+    env.NODE_ENV === "production"
+      ? ("none" as const)
+      : ("lax" as const),
   path: "/",
   maxAge: env.SESSION_TTL_DAYS * 24 * 60 * 60,
 };
