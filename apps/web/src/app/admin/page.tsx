@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -9,6 +9,7 @@ import {
   AdminOrder,
   AdminShop,
   AdminPartner,
+  AdminNotification,
   getAdminStats,
   getAdminOrders,
   getAdminShops,
@@ -16,8 +17,9 @@ import {
   confirmAdminOrder,
   assignOrderShop,
   assignOrderPartner,
+  getAdminNotifications,
+  markAdminNotificationRead,
 } from "@/lib/admin";
-import { getNotifications } from "@/lib/notifications";
 
 function money(paise: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -25,6 +27,19 @@ function money(paise: number) {
     currency: "INR",
     maximumFractionDigits: 2,
   }).format(paise / 100);
+}
+
+function getDeliveryAddress(order: AdminOrder) {
+  return [
+    order.addressLine1,
+    order.addressLine2,
+    order.locality,
+    order.landmark ? `Near ${order.landmark}` : null,
+    order.city,
+    order.district,
+    order.state,
+    order.postalCode,
+  ].filter(Boolean).join(", ");
 }
 
 const initialStats: AdminStats = {
@@ -52,32 +67,29 @@ export default function AdminDashboard() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [unreadAlerts, setUnreadAlerts] = useState(0);
-  const [latestAlert, setLatestAlert] = useState<{ title: string; body: string } | null>(null);
   const [reload, setReload] = useState(0);
+  const [adminAlerts, setAdminAlerts] = useState<AdminNotification[]>([]);
+  const [alertToast, setAlertToast] = useState<AdminNotification | null>(null);
+  const [browserAlertsEnabled, setBrowserAlertsEnabled] = useState(false);
+  const knownAlertIds = useRef<Set<string> | null>(null);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError("");
 
-      const [dashboard, orderList, shopList, partnerList, notificationResult] =
+      const [dashboard, orderList, shopList, partnerList] =
         await Promise.all([
           getAdminStats(),
           getAdminOrders(),
           getAdminShops(),
           getAdminPartners(),
-          getNotifications({ unreadOnly: true, limit: 20 }),
         ]);
 
       setStats(dashboard);
       setOrders(orderList);
       setShops(shopList);
       setPartners(partnerList);
-      setUnreadAlerts(notificationResult?.data.unreadCount ?? 0);
-      setLatestAlert(notificationResult?.data.items[0]
-        ? { title: notificationResult.data.items[0].title, body: notificationResult.data.items[0].body }
-        : null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load dashboard.";
@@ -90,20 +102,96 @@ export default function AdminDashboard() {
 
       setError(message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [router]);
+
+  const refreshAdminAlerts = useCallback(async () => {
+    try {
+      const response = await getAdminNotifications();
+      const orderAlerts = response.items.filter(
+        (item) => item.type === "ADMIN_ALERT" && item.relatedOrderId
+      );
+      setAdminAlerts(orderAlerts);
+
+      if (knownAlertIds.current === null) {
+        knownAlertIds.current = new Set(orderAlerts.map((item) => item.id));
+        if (orderAlerts.length > 0) {
+          setAlertToast(orderAlerts[0]);
+        }
+        return;
+      }
+
+      const freshAlerts = orderAlerts.filter(
+        (item) => !knownAlertIds.current?.has(item.id)
+      );
+      for (const item of orderAlerts) knownAlertIds.current.add(item.id);
+
+      if (freshAlerts.length > 0) {
+        const newest = freshAlerts[0];
+        setAlertToast(newest);
+
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          new Notification("New ApnaBasket order", {
+            body: newest.body,
+            tag: newest.id,
+          });
+        }
+      }
+    } catch (err) {
+      // Keep the order dashboard usable if notifications are temporarily unavailable.
+      console.error("Unable to refresh admin order alerts:", err);
+    }
+  }, []);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard, reload]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setReload((value) => value + 1);
+    void refreshAdminAlerts();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadDashboard(false);
+        void refreshAdminAlerts();
+      }
     }, 15000);
-    return () => window.clearInterval(timer);
-  }, []);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadDashboard, refreshAdminAlerts]);
+
+  async function reviewAdminAlert(alert: AdminNotification) {
+    try {
+      await markAdminNotificationRead(alert.id);
+      setAdminAlerts((current) => current.filter((item) => item.id !== alert.id));
+      setAlertToast((current) => current?.id === alert.id ? null : current);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open order alert.");
+    }
+
+    if (alert.relatedOrderId) {
+      document.getElementById(`order-${alert.relatedOrderId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }
+
+  async function enableBrowserAlerts() {
+    if (!("Notification" in window)) {
+      setNotice("This browser does not support desktop notifications. Keep the admin dashboard open to see in-app alerts.");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    const enabled = permission === "granted";
+    setBrowserAlertsEnabled(enabled);
+    setNotice(
+      enabled
+        ? "Desktop order alerts enabled for this browser."
+        : "Browser notifications were not enabled. In-app alerts will still appear while the admin dashboard is open."
+    );
+  }
 
   async function performAction(
     id: string,
@@ -158,12 +246,6 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex gap-2">
-            <a
-              href="/notifications"
-              className="rounded-lg border px-4 py-2 text-sm font-semibold"
-            >
-              Alerts{unreadAlerts > 0 ? ` (${unreadAlerts})` : ""}
-            </a>
             <button
               onClick={() => setReload((value) => value + 1)}
               className="rounded-lg border px-4 py-2 text-sm font-semibold"
@@ -187,6 +269,73 @@ export default function AdminDashboard() {
           Monitor ApnaBasket's daily operations.
         </p>
 
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void enableBrowserAlerts()}
+            className="rounded-lg border border-green-700 px-3 py-2 text-sm font-semibold text-green-800"
+          >
+            {browserAlertsEnabled ? "Desktop alerts enabled" : "Enable desktop order alerts"}
+          </button>
+          <span className="text-xs text-gray-500">
+            The dashboard also checks for new orders every 15 seconds while this page is open.
+          </span>
+        </div>
+
+        {alertToast && (
+          <div role="alert" className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <div>
+              <p className="font-bold text-amber-950">New customer order — confirmation required</p>
+              <p className="mt-1 text-sm text-amber-900">{alertToast.body}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void reviewAdminAlert(alertToast)}
+                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white"
+              >
+                Review order
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlertToast(null)}
+                className="rounded-lg border border-amber-400 px-3 py-2 text-sm font-semibold text-amber-950"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        {adminAlerts.length > 0 && (
+          <section className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-bold text-gray-900">Orders awaiting your review</h3>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
+                {adminAlerts.length} unread
+              </span>
+            </div>
+            <div className="mt-3 space-y-2">
+              {adminAlerts.map((alert) => (
+                <div key={alert.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{alert.title}</p>
+                    <p className="text-sm text-gray-700">{alert.body}</p>
+                    <p className="mt-1 text-xs text-gray-500">{new Date(alert.createdAt).toLocaleString("en-IN")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void reviewAdminAlert(alert)}
+                    className="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white"
+                  >
+                    Review & confirm
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {notice && (
           <div className="mt-5 rounded-xl bg-green-50 p-4 text-sm text-green-800">
             {notice}
@@ -197,19 +346,6 @@ export default function AdminDashboard() {
           <div role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
-        )}
-
-        {unreadAlerts > 0 && (
-          <section className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-bold text-amber-900">{unreadAlerts} unread operations alert{unreadAlerts === 1 ? "" : "s"}</p>
-                {latestAlert && <><p className="mt-1 text-sm font-semibold text-amber-900">{latestAlert.title}</p><p className="mt-1 text-sm text-amber-800">{latestAlert.body}</p></>}
-                <p className="mt-2 text-xs text-amber-800">New alerts are checked automatically while this dashboard is open.</p>
-              </div>
-              <a href="/notifications" className="rounded-lg bg-amber-900 px-3 py-2 text-sm font-semibold text-white">View alerts</a>
-            </div>
-          </section>
         )}
 
         <section className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -252,6 +388,7 @@ export default function AdminDashboard() {
               {orders.map((order) => (
                 <article
                   key={order.id}
+                  id={`order-${order.id}`}
                   className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
@@ -278,29 +415,36 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
+                  <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-800">
+                      Delivery address
+                    </p>
+                    <p className="mt-1 font-semibold text-gray-900">
+                      {order.recipientName || order.customerName || "Customer"} · {order.recipientPhone || order.customerPhone}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-gray-800">
+                      {getDeliveryAddress(order)}
+                    </p>
+                    {order.deliveryInstructions && (
+                      <p className="mt-2 text-sm text-gray-700">
+                        Instructions: {order.deliveryInstructions}
+                      </p>
+                    )}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getDeliveryAddress(order))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex text-sm font-bold text-blue-800 underline"
+                    >
+                      Open delivery location in Google Maps ↗
+                    </a>
+                  </div>
+
                   {order.shopName && (
                     <p className="mt-3 text-sm text-gray-600">
                       Shop: <strong>{order.shopName}</strong>
                     </p>
                   )}
-
-                  <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm">
-                    <p className="font-semibold">Deliver to: {order.recipientName}</p>
-                    <p className="mt-1 text-gray-700">
-                      {order.addressLine1}
-                      {order.addressLine2 ? `, ${order.addressLine2}` : ""}
-                      {`, ${order.locality}, ${order.city}, ${order.district}, ${order.state} - ${order.postalCode}`}
-                    </p>
-                    {order.landmark && <p className="mt-1 text-gray-600">Landmark: {order.landmark}</p>}
-                    <p className="mt-1 text-gray-600">Delivery phone: {order.recipientPhone}</p>
-                    {order.deliveryInstructions && <p className="mt-1 text-gray-600">Instructions: {order.deliveryInstructions}</p>}
-                    <a
-                      className="mt-2 inline-block font-semibold text-green-700 underline"
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([order.addressLine1, order.addressLine2, order.locality, order.city, order.district, order.state, order.postalCode].filter(Boolean).join(", "))}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >Open delivery address in Maps</a>
-                  </div>
 
                   <div className="mt-5 flex flex-wrap gap-3">
                     {order.status === "PLACED" && (
@@ -361,6 +505,12 @@ export default function AdminDashboard() {
                       </>
                     )}
 
+                    {order.status === "CONFIRMED" && order.assignedShopId && partners.every((partner) => !partner.isAvailable) && (
+                      <p className="w-full rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                        No delivery partner is currently available. Ask a partner to open /delivery and switch their status to Available, then refresh this dashboard.
+                      </p>
+                    )}
+
                     {order.status === "CONFIRMED" && order.assignedShopId && (
                       <>
                         <select
@@ -374,17 +524,12 @@ export default function AdminDashboard() {
                           className="rounded-lg border px-3 py-2 text-sm"
                         >
                           <option value="">Select available partner</option>
-                          {partners.filter((partner) => partner.isAvailable).map((partner) => (
-                            <option key={partner.id} value={partner.id}>
-                              {partner.fullName || partner.phone} · {partner.vehicleType || "Vehicle not set"}
+                          {partners.map((partner) => (
+                            <option key={partner.id} value={partner.id} disabled={!partner.isAvailable}>
+                              {partner.fullName || partner.phone} — {partner.isAvailable ? "Available" : "Offline"}
                             </option>
                           ))}
                         </select>
-                        {partners.filter((partner) => partner.isAvailable).length === 0 && (
-                          <p className="w-full text-xs text-amber-700">
-                            No active partner is online. Activate a partner in Partner Management, then ask them to log in and switch their status to Available on the delivery dashboard.
-                          </p>
-                        )}
 
                         <button
                           disabled={

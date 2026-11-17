@@ -37,6 +37,23 @@ export type AdminOrder = {
   assignedShopId: string | null;
 };
 
+export type AdminNotification = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  actionUrl: string | null;
+  relatedOrderId: string | null;
+  metadata: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type AdminNotificationsResponse = {
+  items: AdminNotification[];
+  unreadCount: number;
+};
+
 export type AdminShop = {
   id: string;
   name: string;
@@ -107,3 +124,9 @@ export const assignOrderPartner = (
   adminRequest(`/admin/orders/${id}/assign-delivery`, "POST", {
     deliveryPartnerId,
   });
+
+export const getAdminNotifications = () =>
+  adminRequest<AdminNotificationsResponse>("/notifications?unreadOnly=true&limit=50");
+
+export const markAdminNotificationRead = (id: string) =>
+  adminRequest<void>(`/notifications/${id}/read`, "PATCH");

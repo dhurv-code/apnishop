@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getOrder, type OrderDetails, type OrderEvent } from "@/lib/orders";
 
@@ -42,7 +42,7 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function CustomerOrderDetailPage() {
+function CustomerOrderDetailContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const orderId = params.id;
@@ -179,5 +179,18 @@ export default function CustomerOrderDetailPage() {
         </section>
       </div>
     </main>
+  );
+}
+export default function CustomerOrderDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center">
+          <p>Loading order details...</p>
+        </main>
+      }
+    >
+      <CustomerOrderDetailContent />
+    </Suspense>
   );
 }
