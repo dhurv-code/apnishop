@@ -48,22 +48,11 @@ export async function orderRoutes(app: FastifyInstance) {
       });
     }
 
-
     if (customer.role !== "CUSTOMER") {
-
-
       return reply.code(403).send({
-
-
         success: false,
-
-
         message: "Customer access required.",
-
-
       });
-
-
     }
 
     const parsed = checkoutSchema.safeParse(request.body);
@@ -378,22 +367,11 @@ export async function orderRoutes(app: FastifyInstance) {
       });
     }
 
-
     if (customer.role !== "CUSTOMER") {
-
-
       return reply.code(403).send({
-
-
         success: false,
-
-
         message: "Customer access required.",
-
-
       });
-
-
     }
 
     const result = await db
@@ -434,22 +412,11 @@ export async function orderRoutes(app: FastifyInstance) {
         });
       }
 
-
       if (customer.role !== "CUSTOMER") {
-
-
         return reply.code(403).send({
-
-
           success: false,
-
-
           message: "Customer access required.",
-
-
         });
-
-
       }
 
       if (!orderIdSchema.safeParse(request.params.id).success) {
@@ -477,16 +444,31 @@ export async function orderRoutes(app: FastifyInstance) {
         });
       }
 
-      const items = await db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.orderId, order.id));
+      const [items, events] = await Promise.all([
+        db
+          .select()
+          .from(orderItems)
+          .where(eq(orderItems.orderId, order.id)),
+        db
+          .select({
+            id: orderEvents.id,
+            eventType: orderEvents.eventType,
+            previousStatus: orderEvents.previousStatus,
+            newStatus: orderEvents.newStatus,
+            actorRole: orderEvents.actorRole,
+            createdAt: orderEvents.createdAt,
+          })
+          .from(orderEvents)
+          .where(eq(orderEvents.orderId, order.id))
+          .orderBy(orderEvents.createdAt),
+      ]);
 
       return {
         success: true,
         data: {
           ...order,
           items,
+          events,
         },
       };
     }

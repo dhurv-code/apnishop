@@ -72,6 +72,13 @@ export default function DeliveryDashboard() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadData();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [loadData]);
+
   async function runAction(key: string, action: () => Promise<unknown>) {
     setBusy(key);
     setMessage("");

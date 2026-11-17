@@ -23,19 +23,35 @@ export type OrderItem = {
   status: string;
 };
 
+export type OrderEvent = {
+  id: string;
+  eventType: string;
+  previousStatus: string | null;
+  newStatus: string | null;
+  actorRole: string | null;
+  createdAt: string;
+};
+
 export type OrderDetails = CreatedOrder & {
   items: OrderItem[];
+  events: OrderEvent[];
   recipientName: string;
   recipientPhone: string;
   addressLine1: string;
+  addressLine2: string | null;
   locality: string;
+  landmark: string | null;
+  deliveryInstructions: string | null;
   city: string;
   district: string;
   state: string;
   postalCode: string;
   itemSubtotalEstimatedPaise: number;
+  itemSubtotalActualPaise: number;
   deliveryFeePaise: number;
   platformFeePaise: number;
+  otherChargesPaise: number;
+  priceFinalizedAt: string | null;
 };
 
 type ApiResponse<T> = {

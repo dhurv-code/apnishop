@@ -22,6 +22,17 @@ export type AdminOrder = {
   createdAt: string;
   customerName: string | null;
   customerPhone: string;
+  recipientName: string;
+  recipientPhone: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  locality: string;
+  landmark: string | null;
+  city: string;
+  district: string;
+  state: string;
+  postalCode: string;
+  deliveryInstructions: string | null;
   shopName: string | null;
   assignedShopId: string | null;
 };

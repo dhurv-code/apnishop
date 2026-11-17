@@ -17,6 +17,7 @@ import {
   assignOrderShop,
   assignOrderPartner,
 } from "@/lib/admin";
+import { getNotifications } from "@/lib/notifications";
 
 function money(paise: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -51,6 +52,8 @@ export default function AdminDashboard() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [latestAlert, setLatestAlert] = useState<{ title: string; body: string } | null>(null);
   const [reload, setReload] = useState(0);
 
   const loadDashboard = useCallback(async () => {
@@ -58,18 +61,23 @@ export default function AdminDashboard() {
       setLoading(true);
       setError("");
 
-      const [dashboard, orderList, shopList, partnerList] =
+      const [dashboard, orderList, shopList, partnerList, notificationResult] =
         await Promise.all([
           getAdminStats(),
           getAdminOrders(),
           getAdminShops(),
           getAdminPartners(),
+          getNotifications({ unreadOnly: true, limit: 20 }),
         ]);
 
       setStats(dashboard);
       setOrders(orderList);
       setShops(shopList);
       setPartners(partnerList);
+      setUnreadAlerts(notificationResult?.data.unreadCount ?? 0);
+      setLatestAlert(notificationResult?.data.items[0]
+        ? { title: notificationResult.data.items[0].title, body: notificationResult.data.items[0].body }
+        : null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load dashboard.";
@@ -89,6 +97,13 @@ export default function AdminDashboard() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard, reload]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setReload((value) => value + 1);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function performAction(
     id: string,
@@ -143,6 +158,12 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex gap-2">
+            <a
+              href="/notifications"
+              className="rounded-lg border px-4 py-2 text-sm font-semibold"
+            >
+              Alerts{unreadAlerts > 0 ? ` (${unreadAlerts})` : ""}
+            </a>
             <button
               onClick={() => setReload((value) => value + 1)}
               className="rounded-lg border px-4 py-2 text-sm font-semibold"
@@ -176,6 +197,19 @@ export default function AdminDashboard() {
           <div role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
+        )}
+
+        {unreadAlerts > 0 && (
+          <section className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-bold text-amber-900">{unreadAlerts} unread operations alert{unreadAlerts === 1 ? "" : "s"}</p>
+                {latestAlert && <><p className="mt-1 text-sm font-semibold text-amber-900">{latestAlert.title}</p><p className="mt-1 text-sm text-amber-800">{latestAlert.body}</p></>}
+                <p className="mt-2 text-xs text-amber-800">New alerts are checked automatically while this dashboard is open.</p>
+              </div>
+              <a href="/notifications" className="rounded-lg bg-amber-900 px-3 py-2 text-sm font-semibold text-white">View alerts</a>
+            </div>
+          </section>
         )}
 
         <section className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -249,6 +283,24 @@ export default function AdminDashboard() {
                       Shop: <strong>{order.shopName}</strong>
                     </p>
                   )}
+
+                  <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm">
+                    <p className="font-semibold">Deliver to: {order.recipientName}</p>
+                    <p className="mt-1 text-gray-700">
+                      {order.addressLine1}
+                      {order.addressLine2 ? `, ${order.addressLine2}` : ""}
+                      {`, ${order.locality}, ${order.city}, ${order.district}, ${order.state} - ${order.postalCode}`}
+                    </p>
+                    {order.landmark && <p className="mt-1 text-gray-600">Landmark: {order.landmark}</p>}
+                    <p className="mt-1 text-gray-600">Delivery phone: {order.recipientPhone}</p>
+                    {order.deliveryInstructions && <p className="mt-1 text-gray-600">Instructions: {order.deliveryInstructions}</p>}
+                    <a
+                      className="mt-2 inline-block font-semibold text-green-700 underline"
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([order.addressLine1, order.addressLine2, order.locality, order.city, order.district, order.state, order.postalCode].filter(Boolean).join(", "))}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >Open delivery address in Maps</a>
+                  </div>
 
                   <div className="mt-5 flex flex-wrap gap-3">
                     {order.status === "PLACED" && (
@@ -324,10 +376,15 @@ export default function AdminDashboard() {
                           <option value="">Select available partner</option>
                           {partners.filter((partner) => partner.isAvailable).map((partner) => (
                             <option key={partner.id} value={partner.id}>
-                              {partner.fullName || partner.phone}
+                              {partner.fullName || partner.phone} · {partner.vehicleType || "Vehicle not set"}
                             </option>
                           ))}
                         </select>
+                        {partners.filter((partner) => partner.isAvailable).length === 0 && (
+                          <p className="w-full text-xs text-amber-700">
+                            No active partner is online. Activate a partner in Partner Management, then ask them to log in and switch their status to Available on the delivery dashboard.
+                          </p>
+                        )}
 
                         <button
                           disabled={
