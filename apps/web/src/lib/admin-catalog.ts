@@ -32,6 +32,7 @@ export type CatalogProduct = {
   brand: string | null;
   unitLabel: string;
   estimatedPricePaise: number | null;
+  imageUrl: string | null;
   status: "ACTIVE" | "INACTIVE";
   categoryId: string | null;
   categoryName: string | null;

@@ -191,6 +191,7 @@ export default function AdminCatalogPage() {
       categoryId: String(form.get("categoryId") || "") || null,
       estimatedPricePaise:
         price.trim() === "" ? null : Math.round(Number(price) * 100),
+      imageUrl: String(form.get("imageUrl") || "").trim() || null,
     };
 
     await handleAction(
@@ -462,6 +463,8 @@ export default function AdminCatalogPage() {
                   <input name="brand" placeholder="Brand (optional)" className={inputClass}/>
                   <input name="unitLabel" required placeholder="Unit (e.g. 1 kg, 500 ml)" className={inputClass}/>
                   <input name="price" type="number" step="0.01" min="0" placeholder="Estimated price (₹)" className={inputClass}/>
+                  <input name="imageUrl" type="url" placeholder="Product image URL (https://...)" className={inputClass}/>
+                  <p className="-mt-1 text-xs text-gray-500">Paste a direct, publicly accessible image URL. The image will appear on the customer homepage.</p>
 
                   <select name="categoryId" className={inputClass}>
                     <option value="">No category</option>
