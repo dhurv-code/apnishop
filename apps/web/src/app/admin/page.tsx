@@ -245,7 +245,14 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <a
+              href="/admin/partners"
+              className="rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50"
+            >
+              Manage Delivery Partners
+            </a>
+
             <button
               onClick={() => setReload((value) => value + 1)}
               className="rounded-lg border px-4 py-2 text-sm font-semibold"
