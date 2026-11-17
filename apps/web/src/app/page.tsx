@@ -81,7 +81,6 @@ export default function Home() {
     useState<CustomerUser | null>(null);
 
   const [authChecked, setAuthChecked] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -103,21 +102,15 @@ export default function Home() {
   }, []);
 
   async function handleLogout() {
-    if (loggingOut) return;
-
-    setLoggingOut(true);
     try {
       await logoutCustomer();
       setCurrentUser(null);
       setCart(null);
-      setNotice("You have been logged out.");
       router.refresh();
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Logout failed."
       );
-    } finally {
-      setLoggingOut(false);
     }
   }
 
@@ -377,28 +370,85 @@ export default function Home() {
             </a>
 
             {!authChecked ? (
-              <span className="px-2 text-xs text-gray-400">Checking...</span>
+              <span className="px-2 text-xs text-gray-400">Checking account...</span>
             ) : currentUser ? (
-              <>
+              <div className="flex items-center gap-2">
                 <a
-                  href="/orders"
-                  className="rounded-xl border border-gray-200 px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  href={
+                    currentUser.role === "ADMIN"
+                      ? "/admin"
+                      : currentUser.role === "DELIVERY_PARTNER"
+                        ? "/delivery"
+                        : "/orders"
+                  }
+                  className="hidden rounded-xl border border-green-700 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 sm:inline-block"
                 >
-                  My Orders
+                  {currentUser.role === "ADMIN"
+                    ? "Admin dashboard"
+                    : currentUser.role === "DELIVERY_PARTNER"
+                      ? "Delivery dashboard"
+                      : "My orders"}
                 </a>
-                <button
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  disabled={loggingOut}
-                  className="rounded-xl border border-red-200 px-3 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loggingOut ? "Logging out..." : "Logout"}
-                </button>
-              </>
+
+                <details className="relative">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-2 hover:bg-gray-50 sm:px-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-extrabold text-green-800">
+                      {(currentUser.fullName?.trim().charAt(0) || currentUser.phone.slice(-1) || "U").toUpperCase()}
+                    </span>
+                    <span className="hidden min-w-0 text-left sm:block">
+                      <span className="block max-w-[130px] truncate text-sm font-semibold text-gray-800">
+                        {currentUser.fullName || currentUser.phone}
+                      </span>
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                        {currentUser.role.replace(/_/g, " ")}
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="text-xs text-gray-500">▾</span>
+                  </summary>
+
+                  <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl">
+                    <div className="border-b border-gray-100 px-2 pb-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        Signed in as
+                      </p>
+                      <p className="mt-1 break-words text-sm font-bold text-gray-900">
+                        {currentUser.fullName || "ApnaBasket user"}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">{currentUser.phone}</p>
+                      <span className="mt-2 inline-flex rounded-full bg-green-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-green-800">
+                        {currentUser.role.replace(/_/g, " ")}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-1 py-2 text-sm">
+                      {currentUser.role === "CUSTOMER" && (
+                        <>
+                          <a href="/orders" className="rounded-lg px-2 py-2 text-gray-700 hover:bg-gray-50">My orders</a>
+                          <a href="/account/addresses" className="rounded-lg px-2 py-2 text-gray-700 hover:bg-gray-50">My addresses</a>
+                        </>
+                      )}
+                      {currentUser.role === "ADMIN" && (
+                        <a href="/admin" className="rounded-lg px-2 py-2 font-semibold text-green-800 hover:bg-green-50">Open admin dashboard</a>
+                      )}
+                      {currentUser.role === "DELIVERY_PARTNER" && (
+                        <a href="/delivery" className="rounded-lg px-2 py-2 font-semibold text-green-800 hover:bg-green-50">Open delivery dashboard</a>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleLogout()}
+                      className="w-full rounded-lg border border-red-100 px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                </details>
+              </div>
             ) : (
               <a
                 href="/login"
-                className="rounded-xl border border-green-700 px-3 py-3 text-sm font-semibold text-green-800 hover:bg-green-50"
+                className="rounded-xl border border-green-700 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50"
               >
                 Login
               </a>
@@ -762,26 +812,25 @@ export default function Home() {
               <span className="text-[10px]">Account</span>
             </span>
           ) : currentUser ? (
-            <>
-              <a
-                href="/orders"
-                className="flex flex-col items-center gap-1 text-gray-500"
-              >
-                <span>📦</span>
-                <span className="text-[10px]">Orders</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                disabled={loggingOut}
-                className="flex flex-col items-center gap-1 text-red-600 disabled:opacity-50"
-              >
-                <span>↪</span>
-                <span className="text-[10px]">
-                  {loggingOut ? "Wait..." : "Logout"}
-                </span>
-              </button>
-            </>
+            <a
+              href={
+                currentUser.role === "ADMIN"
+                  ? "/admin"
+                  : currentUser.role === "DELIVERY_PARTNER"
+                    ? "/delivery"
+                    : "/account/addresses"
+              }
+              className="flex max-w-20 flex-col items-center gap-1 text-gray-600"
+            >
+              <span>👤</span>
+              <span className="max-w-full truncate text-[10px]">
+                {currentUser.role === "ADMIN"
+                  ? "Admin"
+                  : currentUser.role === "DELIVERY_PARTNER"
+                    ? "Delivery"
+                    : currentUser.fullName?.split(" ")[0] || "Account"}
+              </span>
+            </a>
           ) : (
             <a
               href="/login"
